@@ -4,6 +4,9 @@
 //! no non-`Copy` types allowed, etc). **Please test all code generated with `blair_mountain` in
 //! both release and debug modes.**
 
+#[doc(hidden)]
+pub use paste::item as paste_item;
+
 /// Define a union.
 ///
 /// **Note: fields must be `Copy`.**
@@ -16,9 +19,6 @@
 ///     pub two: u32,
 /// }
 /// ```
-
-pub use paste::item as paste_item;
-
 #[macro_export]
 macro_rules! union {
     {

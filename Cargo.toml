@@ -1,7 +1,7 @@
 [package]
 name = "blair_mountain"
 description = "Union types in release mode with debug assertions in debug mode"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Restioson <restiosondev@gmail.com>"]
 edition = "2018"
 license = "MPL-2.0"
