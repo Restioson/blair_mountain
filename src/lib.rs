@@ -16,6 +16,9 @@
 ///     pub two: u32,
 /// }
 /// ```
+
+pub use paste::item as paste_item;
+
 #[macro_export]
 macro_rules! union {
     {
@@ -27,7 +30,7 @@ macro_rules! union {
     } => {
         $(
             #[cfg(debug_assertions)]
-            paste::item! {
+            $crate::paste_item! {
                 #[allow(non_camel_case_types)]
                 $union_vis enum [<$name Inner>] {
                     $($member($member_type),)*
@@ -69,7 +72,7 @@ macro_rules! union {
             }
 
             #[cfg(not(debug_assertions))]
-            paste::item! {
+            $crate::paste_item! {
                 $union_vis union [<$name Inner>] {
                     $($member: $member_type,)*
                 }
@@ -102,7 +105,7 @@ macro_rules! union {
                 }
             }
 
-            paste::item! {
+            $crate::paste_item! {
                 #[repr(transparent)]
                 $union_vis struct $name([<$name Inner>]);
             }
