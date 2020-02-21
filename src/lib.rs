@@ -3,6 +3,19 @@
 //! **they will not.**  It is therefore unsafe. Fields should be treated as fields of unions (i.e
 //! no non-`Copy` types allowed, etc). **Please test all code generated with `blair_mountain` in
 //! both release and debug modes.**
+
+/// Define a union.
+///
+/// **Note: fields must be `Copy`.**
+///
+/// # Example
+///
+/// ```rust
+/// pub union Example {
+///     pub one: &'static str,
+///     pub two: u32,
+/// }
+/// ```
 #[macro_export]
 macro_rules! union {
     {
