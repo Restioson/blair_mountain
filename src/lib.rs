@@ -7,7 +7,8 @@
 #[doc(hidden)]
 pub use paste::item as paste_item;
 
-/// Define a union. Variants must have trailing commas. Variants cannot have `Drop` implementations.
+/// Define a union. Variants must have trailing commas. Variants must be `Copy`
+/// (without [this feature gate](https://github.com/rust-lang/rust/issues/55149)).
 /// `Hash`, `Default`, `Debug` (and some other traits) can't be derived for unions either, so do not
 /// add `#[derive]` invocations of those above a union.
 ///
@@ -33,7 +34,15 @@ pub use paste::item as paste_item;
 ///     pub union Example {
 ///         pub one: &'static str,
 ///         pub two: u32,
+///         private: f32,
 ///     }
+///
+///     pub union GenericExample<T: Copy, U>
+///        where U: Copy + Clone
+///     {
+///        pub one: T,
+///        pub two: U,
+///    }
 /// }
 /// ```
 #[macro_export]
@@ -41,7 +50,11 @@ macro_rules! union {
     {
         $(
             $(#[$union_meta:meta])*
-            $union_vis:vis union $name:ident {
+            $union_vis:vis union $name:ident$(<$($generic:ident $(: $generic_trait:ty)?$(,)?)*>)?
+            $(
+                where $($where_generic:ident: $($where_bound:ty)+)*
+            )?
+            {
                 $($member_vis:vis $member:ident: $member_type:ty,)*
             }
         )*
@@ -50,14 +63,22 @@ macro_rules! union {
             #[cfg(debug_assertions)]
             $crate::paste_item! {
                 #[allow(non_camel_case_types)]
-                enum [<$name Inner>] {
+                enum [<$name Inner>]$(<$($generic,)*>)?
+                $(
+                    where $($where_generic: $($where_bound)*)*
+                )?
+                {
                     $(
                         $member($member_type),
                     )*
                 }
 
                 #[allow(dead_code)]
-                impl $name {
+                impl$(<$($generic$(: $generic_trait)?,)*>)? $name$(<$($generic,)*>)?
+                $(
+                    where $($where_generic: $($where_bound)*)*
+                )?
+                {
                     $(
                         $member_vis fn [<new_ $member>](val: $member_type) -> Self {
                             Self([<$name Inner>]::$member(val))
@@ -93,12 +114,20 @@ macro_rules! union {
 
             #[cfg(not(debug_assertions))]
             $crate::paste_item! {
-                union [<$name Inner>] {
+                union [<$name Inner>]$(<$($generic$(: $generic_trait)?,)*>)?
+                $(
+                    where $($where_generic: $($where_bound)*)*
+                )?
+                {
                     $($member: $member_type,)*
                 }
 
                 #[allow(dead_code)]
-                impl $name {
+                impl$(<$($generic$(: $generic_trait)?,)*>)? $name$(<$($generic,)*>)?
+                $(
+                    where $($where_generic: $($where_bound)*)*
+                )?
+                {
                     $(
                         $member_vis fn [<new_ $member>](val: $member_type) -> Self {
                             Self([<$name Inner>] {
@@ -128,7 +157,12 @@ macro_rules! union {
             $crate::paste_item! {
                 #[repr(transparent)]
                 $(#[$union_meta])*
-                $union_vis struct $name([<$name Inner>]);
+                $union_vis struct $name$(<$($generic$(: $generic_trait)?,)*>)?(
+                        [<$name Inner>]$(<$($generic,)*>)?
+                )
+                $(
+                    where $($where_generic: $($where_bound)*)*
+                )?;
             }
         )*
     };
@@ -141,16 +175,25 @@ pub mod example {
         pub union Example {
             pub one: &'static str,
             pub two: u32,
+            private: f32,
+        }
+
+        /// An example union with generics
+        pub union GenericExample<T: Copy, U>
+            where U: Copy + Clone
+        {
+            pub one: T,
+            pub two: U,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::example::Example;
+    use super::example::{GenericExample, Example};
 
     #[test]
-    fn accessors() {
+    fn accessors_simple() {
         let mut eg_1 = Example::new_one("asdfs");
         unsafe {
             assert_eq!(*eg_1.get_one(), "asdfs");
@@ -175,9 +218,48 @@ mod tests {
     }
 
     #[test]
+    fn accessors_generics() {
+        let mut eg_1: GenericExample<&'static str, u32> = GenericExample::new_one("asdfs");
+        unsafe {
+            assert_eq!(*eg_1.get_one(), "asdfs");
+
+            eg_1.set_two(10);
+            assert_eq!(*eg_1.get_two(), 10);
+        }
+
+        let mut eg_2: GenericExample<&'static str, u32> = GenericExample::new_two(1234);
+
+        unsafe {
+            assert_eq!(*eg_2.get_two(), 1234);
+
+            eg_2.set_two(102);
+            assert_eq!(*eg_2.get_two(), 102);
+
+            *eg_2.get_two_mut() = 101;
+            assert_eq!(*eg_2.get_two(), 101);
+
+            assert_eq!(eg_2.into_two(), 101);
+        }
+    }
+
+    #[test]
     #[should_panic(expected = "unexpected union member")]
-    fn invalid_accessors() {
+    fn invalid_accessor_get() {
         let eg = Example::new_one("asdfs");
         unsafe { eg.get_two(); }
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected union member")]
+    fn invalid_accessor_get_mut() {
+        let mut eg = Example::new_one("asdfs");
+        unsafe { eg.get_two_mut(); }
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected union member")]
+    fn invalid_accessor_into() {
+        let eg = Example::new_one("asdfs");
+        unsafe { eg.into_two(); }
     }
 }
