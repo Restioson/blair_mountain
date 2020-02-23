@@ -7,22 +7,40 @@
 #[doc(hidden)]
 pub use paste::item as paste_item;
 
-/// Define a union.
+/// Define a union. Variants must have trailing commas. Variants cannot have `Drop` implementations.
+/// `Hash`, `Default`, `Debug` (and some other traits) can't be derived for unions either, so do not
+/// add `#[derive]` invocations of those above a union.
+///
+/// This macro creates a struct with the name given and the following methods per variant:
+/// - `new_<variant>(val)` - creates a new union with the given variant
+/// - `get_<variant>` - gets the union's value as the given variant. Unsound if the union is not
+///   of that variant.
+/// - `get_<variant>_mut` - gets the union's value as the given variant mutable. For soundness, refer
+///   to [this page](https://doc.rust-lang.org/reference/items/unions.html)
+/// - `set_<variant>(val)` - sets the union to the given value. The previous variant should be
+///   dropped if need be (`ManuallyDrop`)
+/// - `into_<variant>` - moves the variant out of the union, consuming the union. Unsound if the
+///   union is not of that variant.
 ///
 /// **Note: fields must be `Copy`.**
 ///
 /// # Example
 ///
-/// ```rust
-/// pub union Example {
-///     pub one: &'static str,
-///     pub two: u32,
+/// ```rust,ignore
+/// use blair_mountain::union;
+///
+/// union! {
+///     pub union Example {
+///         pub one: &'static str,
+///         pub two: u32,
+///     }
 /// }
 /// ```
 #[macro_export]
 macro_rules! union {
     {
         $(
+            $(#[$union_meta:meta])*
             $union_vis:vis union $name:ident {
                 $($member_vis:vis $member:ident: $member_type:ty,)*
             }
@@ -32,8 +50,10 @@ macro_rules! union {
             #[cfg(debug_assertions)]
             $crate::paste_item! {
                 #[allow(non_camel_case_types)]
-                $union_vis enum [<$name Inner>] {
-                    $($member($member_type),)*
+                enum [<$name Inner>] {
+                    $(
+                        $member($member_type),
+                    )*
                 }
 
                 #[allow(dead_code)]
@@ -73,7 +93,7 @@ macro_rules! union {
 
             #[cfg(not(debug_assertions))]
             $crate::paste_item! {
-                $union_vis union [<$name Inner>] {
+                union [<$name Inner>] {
                     $($member: $member_type,)*
                 }
 
@@ -107,21 +127,27 @@ macro_rules! union {
 
             $crate::paste_item! {
                 #[repr(transparent)]
+                $(#[$union_meta])*
                 $union_vis struct $name([<$name Inner>]);
             }
         )*
     };
 }
 
-
-#[cfg(test)]
-mod tests {
+/// An example union.
+pub mod example {
     union! {
+        /// An example union.
         pub union Example {
             pub one: &'static str,
             pub two: u32,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::example::Example;
 
     #[test]
     fn accessors() {
